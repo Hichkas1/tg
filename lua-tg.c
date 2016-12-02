@@ -9,12 +9,14 @@
     Telegram-cli is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+    GNU General Public License for more details./*
+With the support of the HTML format 
+( msg & Reply )
 
-    You should have received a copy of the GNU General Public License
-    along with this telegram-cli.  If not, see <http://www.gnu.org/licenses/>.
-
-    Copyright Vitaly Valtman 2013-2015
+*******************
+*   ReZa Hextor   *
+*  @HEXTOR_CH     *
+*******************
 */
 
 #ifdef HAVE_CONFIG_H
@@ -102,6 +104,398 @@ void lua_add_num_field (const char *name, double value) {
 void push_tgl_peer_type (int x) {
   switch (x) {
   case TGL_PEER_USER:
+    lua_pushstring (luaState, "user");
+    break;
+  case TGL_PEER_CHAT:
+    lua_pushstring (luaState, "chat");
+    break;
+  case TGL_PEER_ENCR_CHAT:
+    lua_pushstring (luaState, "encr_chat");
+    break;
+  case TGL_PEER_CHANNEL:
+    lua_pushstring (luaState, "channel");
+    break;
+  default:
+    assert (0);
+  }
+}
+
+void push_user (tgl_peer_t *P) {
+  my_lua_checkstack (luaState, 4);
+  lua_add_string_field ("first_name", P->user.first_name);
+  lua_add_string_field ("last_name", P->user.last_name);
+  lua_add_string_field ("real_first_name", P->user.real_first_name);
+  lua_add_string_field ("real_last_name", P->user.real_last_name);
+  lua_add_string_field ("phone", P->user.phone);
+  lua_add_string_field ("username", P->user.username);
+  if (P->user.access_hash) {
+    lua_add_num_field ("access_hash", P->user.access_hash);
+  }
+}
+
+void push_chat (tgl_peer_t *P) {
+  my_lua_checkstack (luaState, 4);
+  assert (P->chat.title);
+  lua_add_string_field ("title", P->chat.title);
+  lua_add_num_field ("members_num", P->chat.users_num);
+  if (P->chat.user_list) {
+    lua_pushstring (luaState, "members");
+    lua_newtable (luaState);
+    int i;
+    for (i = 0; i < P->chat.users_num; i++) {
+      lua_pushnumber (luaState, i);
+      tgl_peer_id_t id = TGL_MK_USER (P->chat.user_list[i].user_id);
+      push_peer (id, tgl_peer_get (TLS, id));
+      lua_settable (luaState, -3);
+    }
+    lua_settable (luaState, -3);
+  }
+}
+
+void push_encr_chat (tgl_peer_t *P) {
+  my_lua_checkstack (luaState, 4);
+  lua_pushstring (luaState, "user");
+  push_peer (TGL_MK_USER (P->encr_chat.user_id), tgl_peer_get (TLS, TGL_MK_USER (P->encr_chat.user_id)));
+  lua_settable (luaState, -3);
+}
+
+void push_channel (tgl_peer_t *P) {
+  my_lua_checkstack (luaState, 4);
+  lua_add_string_field ("title", P->channel.title);
+  lua_add_string_field ("about", P->channel.about);
+  lua_add_string_field ("username", P->channel.username);
+  lua_add_num_field ("participants_count", P->channel.participants_count);
+  lua_add_num_field ("admins_count", P->channel.admins_count);
+  lua_add_num_field ("kicked_count", P->channel.kicked_count);
+}
+
+void push_update_types (unsigned flags) {
+  my_lua_checkstack (luaState, 4);
+  lua_newtable (luaState);
+  int cc = 0;
+  
+  
+  if (flags & TGL_UPDATE_CREATED) {
+    lua_add_string_field_arr (cc++, "created");
+  }  
+  if (flags & TGL_UPDATE_DELETED) {
+    lua_add_string_field_arr (cc++, "deleted");
+  }  
+  if (flags & TGL_UPDATE_PHONE) {
+    lua_add_string_field_arr (cc++, "phone");
+  }
+  if (flags & TGL_UPDATE_CONTACT) {
+    lua_add_string_field_arr (cc++, "contact");
+  }
+  if (flags & TGL_UPDATE_PHOTO) {
+    lua_add_string_field_arr (cc++, "photo");
+  }
+  if (flags & TGL_UPDATE_BLOCKED) {
+    lua_add_string_field_arr (cc++, "blocked");
+  }
+  if (flags & TGL_UPDATE_REAL_NAME) {
+    lua_add_string_field_arr (cc++, "real_name");
+  }
+  if (flags & TGL_UPDATE_NAME) {
+    lua_add_string_field_arr (cc++, "name");
+  }
+  if (flags & TGL_UPDATE_REQUESTED) {
+    lua_add_string_field_arr (cc++, "requested");
+  }
+  if (flags & TGL_UPDATE_WORKING) {
+    lua_add_string_field_arr (cc++, "working");
+  }
+  if (flags & TGL_UPDATE_FLAGS) {
+    lua_add_string_field_arr (cc++, "flags");
+  }
+  if (flags & TGL_UPDATE_TITLE) {
+    lua_add_string_field_arr (cc++, "title");
+  }
+  if (flags & TGL_UPDATE_ADMIN) {
+    lua_add_string_field_arr (cc++, "admin");
+  }
+  if (flags & TGL_UPDATE_MEMBERS) {
+    lua_add_string_field_arr (cc++, "members");
+  }
+  if (flags & TGL_UPDATE_ACCESS_HASH) {
+    lua_add_string_field_arr (cc++, "access_hash");
+  }
+  if (flags & TGL_UPDATE_USERNAME) {
+    lua_add_string_field_arr (cc++, "username");
+  }
+
+}
+
+void push_peer (tgl_peer_id_t id, tgl_peer_t *P) {
+  lua_newtable (luaState);
+  
+  lua_add_string_field ("id", print_permanent_peer_id (P ? P->id : id));
+  lua_pushstring (luaState, "peer_type");
+  push_tgl_peer_type (tgl_get_peer_type (id));
+  lua_settable (luaState, -3);
+  lua_add_num_field ("peer_id", tgl_get_peer_id (id));
+
+  if (!P || !(P->flags & TGLPF_CREATED)) {
+    lua_pushstring (luaState, "print_name"); 
+    static char s[100];
+    switch (tgl_get_peer_type (id)) {
+    case TGL_PEER_USER:
+      sprintf (s, "user#%d", tgl_get_peer_id (id));
+      break;
+    case TGL_PEER_CHAT:
+      sprintf (s, "chat#%d", tgl_get_peer_id (id));
+      break;
+    case TGL_PEER_ENCR_CHAT:
+      sprintf (s, "encr_chat#%d", tgl_get_peer_id (id));
+      break;
+    case TGL_PEER_CHANNEL:
+      sprintf (s, "channel#%d", tgl_get_peer_id (id));
+      break;
+    default:
+      assert (0);
+    }
+    lua_pushstring (luaState, s); 
+    lua_settable (luaState, -3); // flags
+  
+    return;
+  }
+  
+  lua_add_string_field ("print_name", P->print_name);
+  lua_add_num_field ("flags", P->flags);
+  
+  switch (tgl_get_peer_type (id)) {
+  case TGL_PEER_USER:
+    push_user (P);
+    break;
+  case TGL_PEER_CHAT:
+    push_chat (P);
+    break;
+  case TGL_PEER_ENCR_CHAT:
+    push_encr_chat (P);
+    break;
+  case TGL_PEER_CHANNEL:
+    push_channel (P);
+    break;
+  default:
+    assert (0);
+  }
+}
+
+void push_media (struct tgl_message_media *M) {
+  my_lua_checkstack (luaState, 4);
+
+  switch (M->type) {
+  case tgl_message_media_photo:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "photo");
+    lua_add_string_field ("caption", M->caption);
+    break;
+  case tgl_message_media_document:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "document");
+	lua_add_string_field ("caption", M->document->caption);
+	break;
+  case tgl_message_media_audio:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "audio");
+	lua_add_string_field ("caption", M->caption);
+	break;
+  case tgl_message_media_video:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "video");
+	lua_add_string_field ("caption", M->caption);
+	break;
+  case tgl_message_media_document_encr:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "encr_document");
+	lua_add_string_field ("caption", M->document->caption);
+    break;
+  case tgl_message_media_unsupported:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "unsupported");
+    break;
+  case tgl_message_media_geo:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "geo");
+    lua_add_num_field ("longitude", M->geo.longitude);
+    lua_add_num_field ("latitude", M->geo.latitude);
+    break;
+  case tgl_message_media_contact:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "contact");
+    lua_add_string_field ("phone", M->phone);
+    lua_add_string_field ("first_name", M->first_name);
+    lua_add_string_field ("last_name", M->last_name);
+    lua_add_num_field ("user_id", M->user_id);
+    break;
+  case tgl_message_media_webpage:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "webpage");
+    lua_add_string_field ("url", M->webpage->url);
+    lua_add_string_field ("title", M->webpage->title);
+    lua_add_string_field ("description", M->webpage->description);
+    lua_add_string_field ("author", M->webpage->author);
+    break;
+  case tgl_message_media_venue:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "venue");
+    lua_add_num_field ("longitude", M->venue.geo.longitude);
+    lua_add_num_field ("latitude", M->venue.geo.latitude);
+    lua_add_string_field ("title", M->venue.title);
+    lua_add_string_field ("address", M->venue.address);
+    lua_add_string_field ("provider", M->venue.provider);
+    lua_add_string_field ("venue_id", M->venue.venue_id);
+    break;
+  default:
+    lua_pushstring (luaState, "???");
+  }
+}
+
+void push_service (struct tgl_message *M) {
+  my_lua_checkstack (luaState, 4);
+  switch (M->action.type) {
+  case tgl_message_action_geo_chat_create:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "geo_created");
+    break;
+  case tgl_message_action_geo_chat_checkin:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "geo_checkin");
+    break;
+  case tgl_message_action_chat_create:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "chat_created");
+    lua_add_string_field ("title", M->action.title);
+    break;
+  case tgl_message_action_chat_edit_title:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "chat_rename");
+    lua_add_string_field ("title", M->action.title);
+    break;
+  case tgl_message_action_chat_edit_photo:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "chat_change_photo");
+    break;
+  case tgl_message_action_chat_delete_photo:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "chat_delete_photo");
+    break;
+  case tgl_message_action_chat_add_users:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "chat_add_user");
+    
+    lua_pushstring (luaState, "user");
+    push_peer (tgl_set_peer_id (TGL_PEER_USER, M->action.users[0]), tgl_peer_get (TLS, tgl_set_peer_id (TGL_PEER_USER, M->action.users[0])));
+    lua_settable (luaState, -3);
+    break;
+  case tgl_message_action_chat_add_user_by_link:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "chat_add_user_link");
+    
+    lua_pushstring (luaState, "link_issuer");
+    push_peer (tgl_set_peer_id (TGL_PEER_USER, M->action.user), tgl_peer_get (TLS, tgl_set_peer_id (TGL_PEER_USER, M->action.user)));
+    lua_settable (luaState, -3);
+    break;
+  case tgl_message_action_chat_delete_user:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "chat_del_user");
+    
+    lua_pushstring (luaState, "user");
+    push_peer (tgl_set_peer_id (TGL_PEER_USER, M->action.user), tgl_peer_get (TLS, tgl_set_peer_id (TGL_PEER_USER, M->action.user)));
+    lua_settable (luaState, -3);
+    break;
+  case tgl_message_action_set_message_ttl:
+    lua_newtable (luaState);
+    lua_add_string_field ("type", "set_ttl");
+    lua_add_num_field ("ttl", M->action.ttl);
+    You should have received a copy of the GNU General Public License
+    along with this telegram-cli.  If not, see <http://www.gnu.org/licenses/>.
+
+    Copyright Vitaly Valtman 2013-2015
+*/
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#ifdef USE_LUA
+#include "lua-tg.h"
+
+#include <string.h>
+#include <lualib.h>#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
+#ifdef EVENT_V2
+#include <event2/event.h>
+#else
+#include <event.h>
+#include "event-old.h"
+#endif
+lua_State *luaState;
+
+//#include "interface.h"
+//#include "auto/constants.h"
+#include <tgl/tgl.h>
+#include <tgl/tgl-queries.h>
+#include "interface.h"
+
+#include <assert.h>
+extern int verbosity;
+extern struct tgl_state *TLS;
+
+static int have_file;
+
+void print_start (void);
+void print_end (void);
+
+int ps_lua_pcall (lua_State *l, int a, int b, int c) {
+  print_start ();
+  int r = lua_pcall (l, a, b, c);
+  print_end ();
+  return r;
+}
+
+#define my_lua_checkstack(L,x) assert (lua_checkstack (L, x))
+void push_user (tgl_peer_t *P);
+void push_peer (tgl_peer_id_t id, tgl_peer_t *P);
+
+void lua_add_string_field (const char *name, const char *value) {
+  assert (name && strlen (name));
+  if (!value || !strlen (value)) { return; }
+  my_lua_checkstack (luaState, 3);
+  lua_pushstring (luaState, name);
+  lua_pushstring (luaState, value);
+  lua_settable (luaState, -3);
+}
+
+void lua_add_lstring_field (const char *name, const char *value, int len) {
+  assert (name && strlen (name));
+  if (!value || !len) { return; }
+  my_lua_checkstack (luaState, 3);
+  lua_pushstring (luaState, name);
+  lua_pushlstring (luaState, value, len);
+  lua_settable (luaState, -3);
+}
+
+void lua_add_string_field_arr (int num, const char *value) {
+  if (!value || !strlen (value)) { return; }
+  my_lua_checkstack (luaState, 3);
+  lua_pushnumber (luaState, num);
+  lua_pushstring (luaState, value);
+  lua_settable (luaState, -3);
+}
+
+void lua_add_num_field (const char *name, double value) {
+  assert (name && strlen (name));
+  my_lua_checkstack (luaState, 3);
+  lua_pushstring (luaState, name);
+  lua_pushnumber (luaState, value);
+  lua_settable (luaState, -3);
+}
+
+void push_tgl_peer_type (int x) {
+  switch (x) {
+  case:
     lua_pushstring (luaState, "user");
     break;
   case TGL_PEER_CHAT:
